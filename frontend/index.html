@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>warpterm</title>
+  </head>
+  <body>
+    <div id="app">
+      <header id="bar">
+        <button id="warp-toggle" class="pill">WARP …</button>
+        <span id="egress" class="egress">egress: —</span>
+        <span class="spacer"></span>
+        <select id="account" title="egress account"></select>
+        <button id="rotate" title="new egress IP">⟳ rotate</button>
+      </header>
+      <div id="terminal"></div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

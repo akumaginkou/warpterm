@@ -1,0 +1,76 @@
+:root {
+  --bg: #14161b;
+  --bar: #1c1f27;
+  --fg: #d7dae0;
+  --accent: #f6821f; /* Cloudflare orange */
+  --muted: #7d828c;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+}
+
+#bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  background: var(--bar);
+  border-bottom: 1px solid #000;
+  font-size: 13px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.pill {
+  border: 1px solid var(--muted);
+  border-radius: 999px;
+  padding: 3px 12px;
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.pill.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #111;
+}
+
+.egress {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+button,
+select {
+  background: #262a33;
+  color: var(--fg);
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+#terminal {
+  flex: 1;
+  padding: 6px;
+  overflow: hidden;
+}

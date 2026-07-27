@@ -1,0 +1,17 @@
+//! `warpterm-core` — the Tauri-independent core of warpterm.
+//!
+//! - [`pty`]  — cross-platform PTY shell sessions (`portable-pty`).
+//! - [`warp`] — embedded WARP pool + front SOCKS5 and live controls
+//!   (`warp-masque`).
+//! - [`env`]  — proxy environment injection for spawned shells.
+//!
+//! The Tauri app (`src-tauri`) is a thin shell over this: it shuttles PTY bytes
+//! to xterm.js and exposes the WARP controls as Tauri commands. Keeping the core
+//! GUI-free lets it build and test headlessly.
+
+pub mod env;
+pub mod pty;
+pub mod warp;
+
+pub use pty::{PtyConfig, PtySession};
+pub use warp::{register_accounts, WarpController};

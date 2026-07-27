@@ -1,0 +1,31 @@
+[workspace]
+resolver = "2"
+members = ["crates/warpterm-core"]
+# The Tauri app is a standalone package (its own manifest + h3 patch). It needs
+# the Tauri prerequisites (webkit2gtk-4.1, gtk3, libsoup3) + a display, so it is
+# excluded from this headless workspace; build it with `cargo tauri dev` in
+# src-tauri on a desktop machine.
+exclude = ["src-tauri", "vendor/h3"]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2021"
+rust-version = "1.82"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/akumaginkou/warpterm"
+authors = ["akumaginkou"]
+
+# warp-masque depends on a one-variant patch to `h3` (the `cf-connect-ip`
+# :protocol token). Because Cargo `[patch]` only applies from the root
+# workspace, every consumer must replicate it — so we vendor the patched h3
+# here too. See vendor/h3/PATCH.md.
+[patch.crates-io]
+h3 = { path = "vendor/h3" }
+
+[workspace.dependencies]
+warp-masque = { git = "https://github.com/akumaginkou/warp-proxy.git" }
+portable-pty = "0.9"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "io-util", "time"] }
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

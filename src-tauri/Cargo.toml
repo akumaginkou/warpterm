@@ -1,0 +1,27 @@
+# Standalone Tauri app package (not part of the headless root workspace).
+# Build on a desktop with the Tauri prerequisites: `cargo tauri dev`.
+[package]
+name = "warpterm"
+version = "0.0.1"
+edition = "2021"
+rust-version = "1.82"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/akumaginkou/warpterm"
+authors = ["akumaginkou"]
+default-run = "warpterm"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+warpterm-core = { path = "../crates/warpterm-core" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# warp-masque (a transitive dep via warpterm-core) needs the cf-connect-ip h3
+# patch; Cargo patches only apply from the building workspace root, so replicate
+# it here. See ../vendor/h3/PATCH.md.
+[patch.crates-io]
+h3 = { path = "../vendor/h3" }
