@@ -163,6 +163,17 @@ select {
   color: var(--fg);
 }
 
+.tab-rename {
+  width: 100px;
+  padding: 0 2px;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  font-size: 12px;
+  font-family: inherit;
+}
+
 #panes {
   position: relative;
   flex: 1;

@@ -107,6 +107,21 @@ impl PtySession {
     pub fn try_wait(&mut self) -> Result<Option<bool>> {
         Ok(self.child.try_wait()?.map(|s| s.success()))
     }
+
+    /// The child shell's current working directory, so a new split/tab can open
+    /// there. Linux-only (reads `/proc/<pid>/cwd`); returns `None` elsewhere or
+    /// if it can't be read, and callers fall back to the default directory.
+    pub fn child_cwd(&self) -> Option<PathBuf> {
+        #[cfg(target_os = "linux")]
+        {
+            let pid = self.child.process_id()?;
+            std::fs::read_link(format!("/proc/{pid}/cwd")).ok()
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            None
+        }
+    }
 }
 
 /// The user's default shell for this platform.

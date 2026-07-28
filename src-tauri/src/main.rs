@@ -97,12 +97,16 @@ async fn warp_trace(state: State<'_, AppState>, id: usize) -> Result<String, Str
 
 /// Open a shell in a new PTY, streaming its output as `pty://<id>` events.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 async fn open_pty(
     app: AppHandle,
     state: State<'_, AppState>,
     rows: u16,
     cols: u16,
     transparent: bool,
+    cwd: Option<String>,
+    program: Option<String>,
+    args: Option<Vec<String>>,
 ) -> Result<u32, String> {
     // Point the shell at the WARP front SOCKS port. In transparent mode (Linux),
     // preload proxychains so *all* TCP is forced through WARP, not just
@@ -130,7 +134,11 @@ async fn open_pty(
         rows,
         cols,
         env,
-        ..Default::default()
+        // A launch profile (program/args) or the inherited cwd, when supplied;
+        // otherwise the default shell in the home directory.
+        shell: program,
+        args: args.unwrap_or_default(),
+        cwd: cwd.map(std::path::PathBuf::from),
     };
     let (pty, mut reader, writer) = PtySession::spawn(&cfg).map_err(|e| e.to_string())?;
 
@@ -183,6 +191,17 @@ fn close_pty(state: State<'_, AppState>, id: u32) -> Result<(), String> {
         s.pty.kill().ok();
     }
     Ok(())
+}
+
+/// The shell's current working directory (for opening a split/tab there).
+/// `None` if unknown (non-Linux, or the session is gone).
+#[tauri::command]
+fn pty_cwd(state: State<'_, AppState>, id: u32) -> Option<String> {
+    let sessions = state.sessions.lock().unwrap();
+    sessions
+        .get(&id)
+        .and_then(|s| s.pty.child_cwd())
+        .map(|p| p.to_string_lossy().into_owned())
 }
 
 // ---- settings --------------------------------------------------------------
@@ -261,6 +280,7 @@ fn main() {
             write_pty,
             resize_pty,
             close_pty,
+            pty_cwd,
             get_settings,
             set_settings,
             open_url,

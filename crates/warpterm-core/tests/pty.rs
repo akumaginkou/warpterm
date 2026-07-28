@@ -60,3 +60,34 @@ fn resize_does_not_error() {
     let (session, _reader, _writer) = PtySession::spawn(&PtyConfig::default()).expect("spawn");
     session.resize(40, 120).expect("resize");
 }
+
+/// A shell spawned with an explicit cwd reports it back (used by new-tab/split
+/// cwd inheritance). Linux-only — `child_cwd` returns `None` elsewhere.
+#[cfg(target_os = "linux")]
+#[test]
+fn child_cwd_reports_spawn_dir() {
+    let dir = std::env::temp_dir().join(format!("warpterm-cwd-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let want = std::fs::canonicalize(&dir).unwrap();
+
+    let cfg = PtyConfig {
+        cwd: Some(want.clone()),
+        ..Default::default()
+    };
+    let (mut session, _reader, _writer) = PtySession::spawn(&cfg).expect("spawn");
+
+    // Give the shell a moment to come up so /proc/<pid>/cwd is populated.
+    let mut got = None;
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while Instant::now() < deadline {
+        if let Some(c) = session.child_cwd() {
+            got = Some(c);
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+
+    session.kill().ok();
+    assert_eq!(got.as_deref(), Some(want.as_path()));
+    std::fs::remove_dir_all(&dir).ok();
+}

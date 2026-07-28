@@ -34,6 +34,14 @@ interface Tab {
   root: Node;
   container: HTMLDivElement; // tab-level wrapper in #panes
   focused: Pane;
+  manualTitle?: string; // set by double-click rename; overrides the shell title
+}
+
+/** How to launch a shell: inherited cwd and/or a profile's program/args. */
+interface Launch {
+  cwd?: string;
+  program?: string;
+  args?: string[];
 }
 
 const tabs: Tab[] = [];
@@ -161,12 +169,25 @@ function newPane(): Pane {
   return pane;
 }
 
+/** The shell's current working directory (for opening a split/tab there). */
+async function paneCwd(pane: Pane): Promise<string | undefined> {
+  if (pane.ptyId === null) return undefined;
+  try {
+    return (await invoke<string | null>("pty_cwd", { id: pane.ptyId })) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Spawn a shell for a pane and wire the PTY <-> terminal streams. */
-async function openShell(pane: Pane) {
+async function openShell(pane: Pane, launch: Launch = {}) {
   const id = await invoke<number>("open_pty", {
     rows: pane.term.rows,
     cols: pane.term.cols,
     transparent: transparentEnabled(),
+    cwd: launch.cwd ?? null,
+    program: launch.program ?? null,
+    args: launch.args ?? null,
   });
   pane.ptyId = id;
   pane.unlisten.push(
@@ -276,6 +297,7 @@ function fitActive() {
 async function splitFocused(dir: "row" | "col") {
   const tab = tabs[active];
   if (!tab) return;
+  const cwd = await paneCwd(tab.focused); // open the new pane in the same dir
   const pane = newPane();
   tab.root = replaceLeaf(tab.root, tab.focused, (leaf) => ({
     kind: "split",
@@ -286,7 +308,7 @@ async function splitFocused(dir: "row" | "col") {
   }));
   layoutTab(tab);
   focusPane(pane);
-  await openShell(pane);
+  await openShell(pane, { cwd });
 }
 
 function closeFocusedPane() {
@@ -334,7 +356,7 @@ function focusDir(dx: number, dy: number) {
 // ---- tabs ------------------------------------------------------------------
 
 /** Create a tab (with one pane). If `openNow`, also spawn the shell. */
-async function newTab(openNow = true): Promise<Tab> {
+async function newTab(openNow = true, launch: Launch = {}): Promise<Tab> {
   const container = document.createElement("div");
   container.className = "tabpane";
   panes.appendChild(container);
@@ -343,8 +365,15 @@ async function newTab(openNow = true): Promise<Tab> {
   const tab: Tab = { n: ++counter, root: { kind: "leaf", pane }, container, focused: pane };
   tabs.push(tab);
   setActive(tabs.length - 1);
-  if (openNow) await openShell(pane);
+  if (openNow) await openShell(pane, launch);
   return tab;
+}
+
+/** New tab from a user action: inherit the focused pane's cwd (a profile's own
+ *  cwd, when given, wins). */
+async function newTabInherit(launch: Launch = {}) {
+  const cwd = launch.cwd ?? (tabs[active] ? await paneCwd(tabs[active].focused) : undefined);
+  await newTab(true, { ...launch, cwd });
 }
 
 function setActive(i: number) {
@@ -377,11 +406,21 @@ function renderTabs() {
   tabs.forEach((t, idx) => {
     const el = document.createElement("div");
     el.className = "tab" + (idx === active ? " active" : "");
-    const title = t.focused.title;
-    const label = title ? (title.length > 20 ? title.slice(0, 19) + "…" : title) : String(t.n);
-    el.textContent = label;
-    el.title = title || `tab ${t.n}`;
-    el.onclick = () => setActive(idx);
+    const shown = t.manualTitle ?? (t.focused.title || String(t.n));
+    const label = document.createElement("span");
+    label.className = "tab-label";
+    label.textContent = shown.length > 20 ? shown.slice(0, 19) + "…" : shown;
+    el.appendChild(label);
+    el.title = t.manualTitle ?? t.focused.title ?? `tab ${t.n}`;
+    // Guard so re-clicking the active tab doesn't rebuild the bar mid-double-
+    // click (which would drop the dblclick and break rename).
+    el.onclick = () => {
+      if (idx !== active) setActive(idx);
+    };
+    el.ondblclick = (e) => {
+      e.stopPropagation();
+      beginRename(idx, el);
+    };
     const x = document.createElement("span");
     x.className = "x";
     x.textContent = "×";
@@ -397,8 +436,40 @@ function renderTabs() {
   add.className = "tab add";
   add.textContent = "+";
   add.title = "new tab (Ctrl+Shift+T)";
-  add.onclick = () => newTab();
+  add.onclick = () => newTabInherit();
   tabbar.appendChild(add);
+}
+
+/** Inline-edit a tab's label; Enter/blur commits, Escape cancels. */
+function beginRename(idx: number, el: HTMLElement) {
+  const tab = tabs[idx];
+  if (!tab) return;
+  el.textContent = "";
+  const input = document.createElement("input");
+  input.className = "tab-rename";
+  input.value = tab.manualTitle ?? tab.focused.title ?? String(tab.n);
+  el.appendChild(input);
+  input.focus();
+  input.select();
+  let done = false;
+  const commit = (save: boolean) => {
+    if (done) return;
+    done = true;
+    if (save) tab.manualTitle = input.value.trim() || undefined;
+    renderTabs();
+  };
+  input.onclick = (e) => e.stopPropagation();
+  input.onkeydown = (e) => {
+    e.stopPropagation();
+    if (e.key === "Enter") {
+      e.preventDefault();
+      commit(true);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      commit(false);
+    }
+  };
+  input.onblur = () => commit(true);
 }
 
 // App-level keyboard shortcuts, kept out of the shell (return false = swallow).
@@ -408,9 +479,23 @@ function renderTabs() {
 //   Ctrl+Shift+Arrow      move focus between panes
 //   Ctrl+Shift+C/V        copy selection / paste
 //   Ctrl+Shift+F          scrollback search
+//   Ctrl+1..9             jump to tab N (9 = last) · Ctrl+Tab next / +Shift prev
 //   Ctrl +/-/0            font zoom in / out / reset
 function handleChords(e: KeyboardEvent): boolean {
   if (e.type !== "keydown") return true;
+
+  // Ctrl+Tab / Ctrl+Shift+Tab cycle tabs.
+  if (e.ctrlKey && e.key === "Tab") {
+    const n = tabs.length;
+    if (n > 1) setActive((((active + (e.shiftKey ? -1 : 1)) % n) + n) % n);
+    return false;
+  }
+  // Ctrl+1..9 jump to a tab (9 = last).
+  if (e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey && /^[1-9]$/.test(e.key)) {
+    const d = Number(e.key);
+    setActive(d === 9 ? tabs.length - 1 : Math.min(d - 1, tabs.length - 1));
+    return false;
+  }
 
   if (e.ctrlKey && e.shiftKey) {
     switch (e.key) {
@@ -429,7 +514,7 @@ function handleChords(e: KeyboardEvent): boolean {
     }
     switch (e.key.toLowerCase()) {
       case "t":
-        newTab();
+        newTabInherit();
         return false;
       case "w":
         closeFocusedPane();

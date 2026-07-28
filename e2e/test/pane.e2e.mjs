@@ -31,7 +31,14 @@ async function chord(mods, key) {
 // Scope to the active tab — hidden tabs keep their panes in the DOM.
 const panes = () => driver.findElements(By.css(".tabpane.active .pane"));
 const dividers = (dir) => driver.findElements(By.css(`.tabpane.active .divider.${dir}`));
-const tabsCount = () => driver.findElements(By.css("#tabs .tab:not(.add)")).then((e) => e.length);
+const tabEls = () => driver.findElements(By.css("#tabs .tab:not(.add)"));
+const tabsCount = () => tabEls().then((e) => e.length);
+// Index of the active tab among the (non-add) tabs.
+async function activeTabIndex() {
+  const els = await tabEls();
+  const classes = await Promise.all(els.map((e) => e.getAttribute("class")));
+  return classes.findIndex((c) => /\bactive\b/.test(c));
+}
 
 /** Wait until there are exactly `n` panes (splits/closes update the DOM sync). */
 async function waitPanes(n) {
@@ -42,6 +49,11 @@ async function focusFirstPane() {
   const els = await panes();
   await driver.actions({ async: true }).move({ origin: els[0] }).click().perform();
   await sleep(150);
+}
+
+/** Type a line into the focused terminal (with a trailing Enter). */
+async function typeLine(s) {
+  await driver.actions({ async: true }).sendKeys(s + "\n").perform();
 }
 
 describe("warpterm GUI (tauri-driver)", function () {
@@ -112,6 +124,31 @@ describe("warpterm GUI (tauri-driver)", function () {
     await waitPanes(1); // the new tab has a single pane
   });
 
+  it("switches tabs with Ctrl+1 / Ctrl+2 / Ctrl+Tab", async () => {
+    await focusFirstPane();
+    await chord([Key.CONTROL], "1");
+    await driver.wait(async () => (await activeTabIndex()) === 0, 5000, "Ctrl+1 -> tab 1");
+    await chord([Key.CONTROL], "2");
+    await driver.wait(async () => (await activeTabIndex()) === 1, 5000, "Ctrl+2 -> tab 2");
+    await chord([Key.CONTROL], Key.TAB);
+    await driver.wait(async () => (await activeTabIndex()) === 0, 5000, "Ctrl+Tab wraps to tab 1");
+  });
+
+  it("renames a tab by double-click", async () => {
+    const label = (await driver.findElements(By.css("#tabs .tab:not(.add) .tab-label")))[0];
+    await driver.actions({ async: true }).doubleClick(label).perform();
+    const input = await driver.wait(until.elementLocated(By.css("#tabs .tab-rename")), 5000);
+    await input.sendKeys("mytab", Key.ENTER);
+    await driver.wait(
+      async () => {
+        const els = await tabEls();
+        return (await els[0].getText()).includes("mytab");
+      },
+      5000,
+      "tab label should update",
+    );
+  });
+
   it("toggles the search bar (Ctrl+Shift+F / Escape)", async () => {
     await focusFirstPane();
     await chord([Key.CONTROL, Key.SHIFT], "f");
@@ -119,5 +156,28 @@ describe("warpterm GUI (tauri-driver)", function () {
     await driver.wait(async () => (await search.getAttribute("hidden")) === null, 5000, "search should show");
     await driver.actions({ async: true }).sendKeys(Key.ESCAPE).perform();
     await driver.wait(async () => (await search.getAttribute("hidden")) !== null, 5000, "search should hide");
+  });
+
+  it("inherits the cwd into a split pane", async () => {
+    // Fresh tab (no manual title) so the shell title drives the label.
+    await focusFirstPane();
+    await chord([Key.CONTROL, Key.SHIFT], "t");
+    await sleep(500);
+    // cd somewhere, then split — the new pane should start in that directory.
+    await typeLine("cd /tmp");
+    await sleep(400);
+    await chord([Key.CONTROL, Key.SHIFT], "d");
+    await waitPanes(2);
+    await sleep(600);
+    // Have the new (focused) pane advertise its cwd as the window title.
+    await typeLine(String.raw`printf '\033]0;CWD:%s\a' "$PWD"`);
+    await driver.wait(
+      async () => {
+        const el = await driver.findElement(By.css("#tabs .tab.active .tab-label"));
+        return (await el.getText()).includes("/tmp");
+      },
+      10000,
+      "the split pane's title should report /tmp",
+    );
   });
 });
