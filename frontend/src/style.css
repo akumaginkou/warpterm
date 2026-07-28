@@ -77,8 +77,56 @@ select {
   cursor: pointer;
 }
 
-#terminal {
+#tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  padding: 4px 6px 0;
+  background: var(--bar);
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid #2a2e37;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  background: #21252e;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.tab.active {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.tab .x {
+  color: var(--muted);
+  border-radius: 3px;
+  padding: 0 3px;
+}
+
+.tab .x:hover {
+  background: #3a3f4a;
+  color: var(--fg);
+}
+
+.tab.add {
+  color: var(--fg);
+}
+
+#panes {
+  position: relative;
   flex: 1;
-  padding: 6px;
   overflow: hidden;
+}
+
+.pane {
+  position: absolute;
+  inset: 0;
+  padding: 6px;
 }

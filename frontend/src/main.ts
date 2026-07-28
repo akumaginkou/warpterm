@@ -4,64 +4,164 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import "@xterm/xterm/css/xterm.css";
 import "./style.css";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
-// ---- terminal --------------------------------------------------------------
+// ---- tabs (each = one xterm + one PTY shell) -------------------------------
 
-const term = new Terminal({
-  fontFamily: "ui-monospace, Menlo, Consolas, monospace",
-  fontSize: 13,
-  cursorBlink: true,
-  theme: { background: "#14161b", foreground: "#d7dae0" },
-});
-const fit = new FitAddon();
-term.loadAddon(fit);
-term.open(document.getElementById("terminal")!);
-try {
-  term.loadAddon(new WebglAddon());
-} catch {
-  /* fall back to canvas/DOM renderer */
+interface Tab {
+  n: number; // display number
+  term: Terminal;
+  fit: FitAddon;
+  ptyId: number | null;
+  pane: HTMLDivElement;
+  unlisten: UnlistenFn[];
 }
-fit.fit();
 
-let ptyId: number | null = null;
+const tabs: Tab[] = [];
+let active = -1;
+let counter = 0;
+const panes = document.getElementById("panes") as HTMLDivElement;
+const tabbar = document.getElementById("tabs") as HTMLElement;
+const encoder = new TextEncoder();
 
 function transparentEnabled(): boolean {
   return (document.getElementById("transparent") as HTMLInputElement)?.checked ?? false;
 }
 
-async function startPty() {
-  ptyId = await invoke<number>("open_pty", {
-    rows: term.rows,
-    cols: term.cols,
+function newTerminal(pane: HTMLDivElement): { term: Terminal; fit: FitAddon } {
+  const term = new Terminal({
+    fontFamily: "ui-monospace, Menlo, Consolas, monospace",
+    fontSize: 13,
+    cursorBlink: true,
+    theme: { background: "#14161b", foreground: "#d7dae0" },
+  });
+  const fit = new FitAddon();
+  term.loadAddon(fit);
+  term.open(pane);
+  try {
+    term.loadAddon(new WebglAddon());
+  } catch {
+    /* fall back to the DOM/canvas renderer */
+  }
+  fit.fit();
+  return { term, fit };
+}
+
+/** Spawn a shell for a tab and wire the PTY <-> terminal streams. */
+async function openShell(tab: Tab) {
+  const id = await invoke<number>("open_pty", {
+    rows: tab.term.rows,
+    cols: tab.term.cols,
     transparent: transparentEnabled(),
   });
-
-  // PTY output -> terminal.
-  await listen<number[]>(`pty://${ptyId}`, (e) => {
-    term.write(new Uint8Array(e.payload));
-  });
-  await listen(`pty-exit://${ptyId}`, () => {
-    term.write("\r\n\x1b[90m[process exited]\x1b[0m\r\n");
-  });
-
-  // Keystrokes -> PTY.
-  const encoder = new TextEncoder();
-  term.onData((data) => {
-    if (ptyId !== null) {
-      invoke("write_pty", { id: ptyId, data: Array.from(encoder.encode(data)) });
+  tab.ptyId = id;
+  tab.unlisten.push(
+    await listen<number[]>(`pty://${id}`, (e) => tab.term.write(new Uint8Array(e.payload))),
+  );
+  tab.unlisten.push(
+    await listen(`pty-exit://${id}`, () =>
+      tab.term.write("\r\n\x1b[90m[process exited]\x1b[0m\r\n"),
+    ),
+  );
+  tab.term.onData((d) => {
+    if (tab.ptyId !== null) {
+      invoke("write_pty", { id: tab.ptyId, data: Array.from(encoder.encode(d)) });
     }
   });
 }
 
-// Keep the PTY sized to the window.
-function doFit() {
-  fit.fit();
-  if (ptyId !== null) {
-    invoke("resize_pty", { id: ptyId, rows: term.rows, cols: term.cols });
+/** Create a tab (and its terminal). If `openNow`, also spawn the shell. */
+async function newTab(openNow = true): Promise<Tab> {
+  const pane = document.createElement("div");
+  pane.className = "pane";
+  panes.appendChild(pane);
+  const { term, fit } = newTerminal(pane);
+  pane.addEventListener("mousedown", () => term.focus());
+  term.attachCustomKeyEventHandler(handleChords);
+
+  const tab: Tab = { n: ++counter, term, fit, ptyId: null, pane, unlisten: [] };
+  tabs.push(tab);
+  setActive(tabs.length - 1);
+  if (openNow) await openShell(tab);
+  return tab;
+}
+
+function setActive(i: number) {
+  active = i;
+  tabs.forEach((t, idx) => (t.pane.style.display = idx === i ? "block" : "none"));
+  renderTabs();
+  const t = tabs[i];
+  if (t) {
+    t.fit.fit();
+    if (t.ptyId !== null) invoke("resize_pty", { id: t.ptyId, rows: t.term.rows, cols: t.term.cols });
+    t.term.focus();
   }
 }
-window.addEventListener("resize", doFit);
+
+async function closeTab(i: number) {
+  const t = tabs[i];
+  if (!t) return;
+  if (t.ptyId !== null) invoke("close_pty", { id: t.ptyId });
+  t.unlisten.forEach((u) => u());
+  t.term.dispose();
+  t.pane.remove();
+  tabs.splice(i, 1);
+  if (tabs.length === 0) {
+    await newTab();
+  } else {
+    setActive(Math.min(i, tabs.length - 1));
+  }
+}
+
+function renderTabs() {
+  tabbar.textContent = "";
+  tabs.forEach((t, idx) => {
+    const el = document.createElement("div");
+    el.className = "tab" + (idx === active ? " active" : "");
+    el.textContent = String(t.n);
+    el.onclick = () => setActive(idx);
+    const x = document.createElement("span");
+    x.className = "x";
+    x.textContent = "×";
+    x.title = "close tab";
+    x.onclick = (e) => {
+      e.stopPropagation();
+      closeTab(idx);
+    };
+    el.appendChild(x);
+    tabbar.appendChild(el);
+  });
+  const add = document.createElement("button");
+  add.className = "tab add";
+  add.textContent = "+";
+  add.title = "new tab (Ctrl+Shift+T)";
+  add.onclick = () => newTab();
+  tabbar.appendChild(add);
+}
+
+// Ctrl+Shift+T new tab · Ctrl+Shift+W close tab (kept out of the shell).
+function handleChords(e: KeyboardEvent): boolean {
+  if (e.type === "keydown" && e.ctrlKey && e.shiftKey) {
+    const k = e.key.toLowerCase();
+    if (k === "t") {
+      newTab();
+      return false;
+    }
+    if (k === "w") {
+      closeTab(active);
+      return false;
+    }
+  }
+  return true;
+}
+
+window.addEventListener("resize", () => {
+  const t = tabs[active];
+  if (t) {
+    t.fit.fit();
+    if (t.ptyId !== null) invoke("resize_pty", { id: t.ptyId, rows: t.term.rows, cols: t.term.cols });
+  }
+});
 
 // ---- WARP control bar ------------------------------------------------------
 
@@ -89,9 +189,9 @@ function renderStatus(s: Status) {
   $toggle.textContent = enabled ? "WARP on" : "WARP off";
   $toggle.classList.toggle("on", enabled);
 
-  const active =
+  const activeAcct =
     s.mode === "pinned" ? s.accounts?.find((a) => a.id === s.pinned) : s.accounts?.find((a) => a.ready);
-  const t = active?.trace;
+  const t = activeAcct?.trace;
   $egress.textContent = t?.ip ? `egress: ${t.ip}${t.colo ? " · " + t.colo : ""}` : "egress: —";
 
   const want = (s.accounts ?? []).map((a) => a.id).join(",");
@@ -113,8 +213,7 @@ async function refresh() {
 }
 
 $toggle.onclick = async () => {
-  const enabled = $toggle.classList.contains("on");
-  await invoke("warp_toggle", { on: !enabled });
+  await invoke("warp_toggle", { on: !$toggle.classList.contains("on") });
   refresh();
 };
 $account.onchange = async () => {
@@ -131,13 +230,11 @@ $rotate.onclick = async () => {
     refresh();
   }
 };
-// Transparent mode changes the shell's env, so reload to apply it to a fresh shell.
+// Transparent mode changes the shell's env, so reload to apply it to fresh shells.
 (document.getElementById("transparent") as HTMLInputElement).onchange = () => location.reload();
 
-// ---- boot ------------------------------------------------------------------
+// ---- WARP readiness --------------------------------------------------------
 
-// Open the shell only once WARP is up, so it inherits the proxy env. (WARP
-// on/off is still live thereafter via the pool.) Returns whether it came up.
 async function waitForWarp(timeoutMs = 40000): Promise<boolean> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
@@ -152,21 +249,21 @@ async function waitForWarp(timeoutMs = 40000): Promise<boolean> {
   return false;
 }
 
-// Focus the terminal when the pane is clicked (so keystrokes land in the shell).
-document.getElementById("terminal")!.addEventListener("mousedown", () => term.focus());
+// ---- boot ------------------------------------------------------------------
 
 (async () => {
-  term.writeln("\x1b[90mStarting WARP…\x1b[0m");
+  const first = await newTab(false); // terminal only; open the shell after WARP is up
+  first.term.writeln("\x1b[90mStarting WARP…\x1b[0m");
   const up = await waitForWarp();
   if (up) {
     await invoke("warp_trace", { id: 0 }).catch(() => {});
   } else {
-    term.writeln(
-      "\x1b[33mWARP didn't come up in time — starting the shell without a proxy. Toggle WARP from the bar once it's ready.\x1b[0m",
+    first.term.writeln(
+      "\x1b[33mWARP didn't come up in time — starting the shell without a proxy.\x1b[0m",
     );
   }
-  await startPty();
-  term.focus();
+  await openShell(first);
+  first.term.focus();
   refresh();
 })();
 
