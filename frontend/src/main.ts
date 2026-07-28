@@ -28,12 +28,39 @@ function transparentEnabled(): boolean {
   return (document.getElementById("transparent") as HTMLInputElement)?.checked ?? false;
 }
 
+// ---- settings --------------------------------------------------------------
+
+interface AppSettings {
+  font_size: number;
+  theme: string;
+  transparent_default: boolean;
+  accounts: number;
+}
+let settings: AppSettings = { font_size: 13, theme: "dark", transparent_default: false, accounts: 2 };
+
+function themeFor(name: string) {
+  return name === "light"
+    ? { background: "#f7f7f8", foreground: "#1c1e24", cursor: "#1c1e24" }
+    : { background: "#14161b", foreground: "#d7dae0" };
+}
+
+/** Apply font size + theme to every tab and the app chrome. */
+function applySettings() {
+  document.body.classList.toggle("light", settings.theme === "light");
+  for (const t of tabs) {
+    t.term.options.fontSize = settings.font_size;
+    t.term.options.theme = themeFor(settings.theme);
+    t.fit.fit();
+    if (t.ptyId !== null) invoke("resize_pty", { id: t.ptyId, rows: t.term.rows, cols: t.term.cols });
+  }
+}
+
 function newTerminal(pane: HTMLDivElement): { term: Terminal; fit: FitAddon } {
   const term = new Terminal({
     fontFamily: "ui-monospace, Menlo, Consolas, monospace",
-    fontSize: 13,
+    fontSize: settings.font_size,
     cursorBlink: true,
-    theme: { background: "#14161b", foreground: "#d7dae0" },
+    theme: themeFor(settings.theme),
   });
   const fit = new FitAddon();
   term.loadAddon(fit);
@@ -233,6 +260,51 @@ $rotate.onclick = async () => {
 // Transparent mode changes the shell's env, so reload to apply it to fresh shells.
 (document.getElementById("transparent") as HTMLInputElement).onchange = () => location.reload();
 
+// ---- settings panel --------------------------------------------------------
+
+const $gear = document.getElementById("gear") as HTMLButtonElement;
+const $panel = document.getElementById("settings") as HTMLDivElement;
+const $font = document.getElementById("set-font") as HTMLInputElement;
+const $theme = document.getElementById("set-theme") as HTMLSelectElement;
+const $defTransparent = document.getElementById("set-transparent") as HTMLInputElement;
+const $accounts = document.getElementById("set-accounts") as HTMLInputElement;
+
+const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n || lo));
+
+function populatePanel() {
+  $font.value = String(settings.font_size);
+  $theme.value = settings.theme;
+  $defTransparent.checked = settings.transparent_default;
+  $accounts.value = String(settings.accounts);
+}
+
+async function saveSettings() {
+  await invoke("set_settings", { settings }).catch(() => {});
+}
+
+$gear.onclick = () => ($panel.hidden = !$panel.hidden);
+$font.onchange = () => {
+  settings.font_size = clamp(+$font.value, 6, 48);
+  $font.value = String(settings.font_size);
+  applySettings();
+  saveSettings();
+};
+$theme.onchange = () => {
+  settings.theme = $theme.value;
+  applySettings();
+  saveSettings();
+};
+$defTransparent.onchange = () => {
+  settings.transparent_default = $defTransparent.checked;
+  (document.getElementById("transparent") as HTMLInputElement).checked = settings.transparent_default;
+  saveSettings();
+};
+$accounts.onchange = () => {
+  settings.accounts = clamp(+$accounts.value, 1, 8);
+  $accounts.value = String(settings.accounts);
+  saveSettings();
+};
+
 // ---- WARP readiness --------------------------------------------------------
 
 async function waitForWarp(timeoutMs = 40000): Promise<boolean> {
@@ -252,6 +324,16 @@ async function waitForWarp(timeoutMs = 40000): Promise<boolean> {
 // ---- boot ------------------------------------------------------------------
 
 (async () => {
+  // Load persisted settings before creating any terminal.
+  try {
+    settings = await invoke<AppSettings>("get_settings");
+  } catch {
+    /* keep defaults */
+  }
+  populatePanel();
+  document.body.classList.toggle("light", settings.theme === "light");
+  (document.getElementById("transparent") as HTMLInputElement).checked = settings.transparent_default;
+
   const first = await newTab(false); // terminal only; open the shell after WARP is up
   first.term.writeln("\x1b[90mStarting WARP…\x1b[0m");
   const up = await waitForWarp();

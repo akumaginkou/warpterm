@@ -16,7 +16,23 @@
         </label>
         <select id="account" title="egress account"></select>
         <button id="rotate" title="new egress IP">⟳ rotate</button>
+        <button id="gear" title="settings">⚙</button>
       </header>
+      <div id="settings" class="panel" hidden>
+        <label>Font size <input type="number" id="set-font" min="6" max="48" /></label>
+        <label
+          >Theme
+          <select id="set-theme">
+            <option value="dark">dark</option>
+            <option value="light">light</option>
+          </select></label
+        >
+        <label><input type="checkbox" id="set-transparent" /> transparent by default</label>
+        <label
+          >Accounts <input type="number" id="set-accounts" min="1" max="8" />
+          <span class="hint">(next launch)</span></label
+        >
+      </div>
       <nav id="tabs"></nav>
       <div id="panes"></div>
     </div>

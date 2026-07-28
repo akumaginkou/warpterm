@@ -67,6 +67,45 @@ body,
   cursor: pointer;
 }
 
+body.light {
+  --bg: #f7f7f8;
+  --bar: #e9e9ec;
+  --fg: #1c1e24;
+  --muted: #6b7280;
+}
+
+.panel {
+  position: absolute;
+  top: 40px;
+  right: 10px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--bar);
+  border: 1px solid #000;
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+  font-size: 13px;
+}
+
+.panel label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: space-between;
+}
+
+.panel input[type="number"] {
+  width: 60px;
+}
+
+.panel .hint {
+  color: var(--muted);
+  font-size: 11px;
+}
+
 button,
 select {
   background: #262a33;

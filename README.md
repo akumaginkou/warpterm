@@ -39,6 +39,9 @@ picks up changes without restarting.
 **Tabs.** Multiple shells in tabs — `+` (or `Ctrl+Shift+T`) opens one, `×` (or
 `Ctrl+Shift+W`) closes it; every tab shares the same WARP pool.
 
+**Settings (⚙).** Font size, theme (dark/light), default-transparent, and the
+pooled account count — persisted under the app data dir (`settings.json`).
+
 **Transparent mode (Linux).** By default only proxy-aware tools (git, curl, npm…)
 honour the env. Tick **transparent** in the toolbar and new shells preload
 `proxychains`, forcing *every* program's TCP through WARP — even proxy-unaware

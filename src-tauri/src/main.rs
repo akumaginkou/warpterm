@@ -18,10 +18,11 @@ use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::Mutex as AsyncMutex;
 use warpterm_core::pty::{PtyConfig, PtySession};
-use warpterm_core::{load_or_register, WarpController};
+use warpterm_core::{load_or_register, Settings, WarpController};
 
-/// How many pooled WARP accounts to start with.
-const DEFAULT_ACCOUNTS: usize = 2;
+fn settings_path(app: &AppHandle) -> Option<std::path::PathBuf> {
+    app.path().app_data_dir().ok().map(|d| d.join("settings.json"))
+}
 
 struct AppState {
     warp: AsyncMutex<Option<WarpController>>,
@@ -163,6 +164,19 @@ fn close_pty(state: State<'_, AppState>, id: u32) -> Result<(), String> {
     Ok(())
 }
 
+// ---- settings --------------------------------------------------------------
+
+#[tauri::command]
+fn get_settings(app: AppHandle) -> Settings {
+    settings_path(&app).map(|p| Settings::load(&p)).unwrap_or_default()
+}
+
+#[tauri::command]
+fn set_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
+    let path = settings_path(&app).ok_or("no app data dir")?;
+    settings.save(&path).map_err(|e| e.to_string())
+}
+
 fn main() {
     tauri::Builder::default()
         .manage(AppState {
@@ -176,9 +190,10 @@ fn main() {
             let handle = app.handle().clone();
             // Persist accounts under the app data dir so relaunches reuse them.
             let state_dir = handle.path().app_data_dir().ok().map(|d| d.join("warp"));
+            let n_accounts = settings_path(&handle).map(|p| Settings::load(&p).accounts).unwrap_or(2);
             tauri::async_runtime::spawn(async move {
                 let dir = state_dir.as_deref();
-                match load_or_register(dir, DEFAULT_ACCOUNTS).await {
+                match load_or_register(dir, n_accounts).await {
                     Ok(configs) => match WarpController::start(configs, false).await {
                         Ok(w) => {
                             let state = handle.state::<AppState>();
@@ -202,6 +217,8 @@ fn main() {
             write_pty,
             resize_pty,
             close_pty,
+            get_settings,
+            set_settings,
         ])
         .run(tauri::generate_context!())
         .expect("error while running warpterm");
