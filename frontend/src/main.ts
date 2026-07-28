@@ -349,7 +349,7 @@ async function newTab(openNow = true): Promise<Tab> {
 
 function setActive(i: number) {
   active = i;
-  tabs.forEach((t, idx) => (t.container.style.display = idx === i ? "flex" : "none"));
+  tabs.forEach((t, idx) => t.container.classList.toggle("active", idx === i));
   const t = tabs[i];
   if (t) {
     layoutTab(t);

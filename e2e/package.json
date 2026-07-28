@@ -1,0 +1,13 @@
+{
+  "name": "warpterm-e2e",
+  "private": true,
+  "version": "0.0.1",
+  "description": "WebDriver (tauri-driver) end-to-end tests for the warpterm GUI.",
+  "scripts": {
+    "test": "mocha --timeout 120000 test/*.mjs"
+  },
+  "devDependencies": {
+    "mocha": "^10.7.0",
+    "selenium-webdriver": "^4.24.0"
+  }
+}

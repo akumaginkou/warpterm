@@ -7,6 +7,9 @@ frontend/node_modules
 frontend/dist
 frontend/.vite
 
+# e2e (WebDriver) deps
+e2e/node_modules
+
 # tauri generated
 src-tauri/gen
 src-tauri/target

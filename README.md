@@ -11,10 +11,9 @@ the toolbar — no external proxy, no system VPN, no admin rights.
 > live shell and a WARP control bar that shows the current egress IP/colo, with
 > the `warp-masque` pool embedded in-process. Verified headlessly under Xvfb —
 > shell prompt + live egress (`104.28.x.x · NRT`, WARP on). The terminal core
-> (PTY + embedded WARP + proxy-env injection) is unit-tested headlessly.
->
-> Known gap: automated keystroke injection into the WebKitGTK terminal (for
-> headless E2E tests) needs a WebDriver (`tauri-driver`), not `xdotool`.
+> (PTY + embedded WARP + proxy-env injection) is unit-tested headlessly, and the
+> keyboard-driven GUI (splits, focus nav, tabs, search) is covered by a
+> `tauri-driver` WebDriver suite (`e2e/`) that runs in CI under Xvfb.
 
 ## How it works
 
@@ -102,6 +101,23 @@ The `.deb` declares `proxychains4` as a dependency (for transparent mode).
 ```sh
 cargo test -p warpterm-core     # PTY round-trip + proxy-env unit tests
 ```
+
+### GUI end-to-end (headless, WebDriver)
+
+The keyboard-driven UI is tested against the real binary through
+[`tauri-driver`](https://tauri.app/develop/tests/webdriver/) (WebKitWebDriver).
+Prerequisites: `webkit2gtk-driver`, `xvfb`, and `cargo install tauri-driver`.
+
+```sh
+# build the self-contained app first (embeds the frontend):
+cd frontend && npm install && cd ..
+npx @tauri-apps/cli@^2 build --no-bundle
+
+cd e2e && npm install
+xvfb-run -a npm test            # launches warpterm, drives splits/tabs/search
+```
+
+The app is launched with `WARPTERM_NO_WARP=1`, so the suite needs no network.
 
 ### The app (desktop)
 

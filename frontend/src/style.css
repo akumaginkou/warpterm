@@ -172,6 +172,10 @@ select {
 .tabpane {
   position: absolute;
   inset: 0;
+  display: none;
+}
+
+.tabpane.active {
   display: flex;
 }
 

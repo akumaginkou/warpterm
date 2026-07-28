@@ -21,13 +21,23 @@ use warpterm_core::pty::{PtyConfig, PtySession};
 use warpterm_core::{load_or_register, Settings, WarpController};
 
 fn settings_path(app: &AppHandle) -> Option<std::path::PathBuf> {
-    app.path().app_data_dir().ok().map(|d| d.join("settings.json"))
+    app.path()
+        .app_data_dir()
+        .ok()
+        .map(|d| d.join("settings.json"))
 }
 
 struct AppState {
     warp: AsyncMutex<Option<WarpController>>,
     sessions: Mutex<HashMap<u32, Session>>,
     next_id: AtomicU32,
+    // When true (WARPTERM_NO_WARP set), the WARP pool is never started — shells
+    // run without a proxy. Used by the E2E harness so tests don't need network.
+    warp_disabled: bool,
+}
+
+fn warp_disabled() -> bool {
+    std::env::var_os("WARPTERM_NO_WARP").is_some()
 }
 
 struct Session {
@@ -39,6 +49,10 @@ struct Session {
 
 #[tauri::command]
 async fn warp_status(state: State<'_, AppState>) -> Result<String, String> {
+    if state.warp_disabled {
+        // Report ready so the UI proceeds immediately (no proxy, no waiting).
+        return Ok("{\"ready\":true,\"enabled\":false,\"accounts\":[]}".to_string());
+    }
     match &*state.warp.lock().await {
         Some(w) => Ok(w.status_json()),
         None => Ok("{\"ready\":false}".to_string()),
@@ -72,7 +86,9 @@ async fn warp_rotate(state: State<'_, AppState>, id: usize) -> Result<(), String
 #[tauri::command]
 async fn warp_trace(state: State<'_, AppState>, id: usize) -> Result<String, String> {
     let guard = state.warp.lock().await;
-    let Some(w) = &*guard else { return Ok("{}".into()) };
+    let Some(w) = &*guard else {
+        return Ok("{}".into());
+    };
     w.refresh_trace(id).await;
     Ok(w.status_json())
 }
@@ -110,7 +126,12 @@ async fn open_pty(
         None => Vec::new(),
     };
 
-    let cfg = PtyConfig { rows, cols, env, ..Default::default() };
+    let cfg = PtyConfig {
+        rows,
+        cols,
+        env,
+        ..Default::default()
+    };
     let (pty, mut reader, writer) = PtySession::spawn(&cfg).map_err(|e| e.to_string())?;
 
     let id = state.next_id.fetch_add(1, Ordering::Relaxed);
@@ -168,7 +189,9 @@ fn close_pty(state: State<'_, AppState>, id: u32) -> Result<(), String> {
 
 #[tauri::command]
 fn get_settings(app: AppHandle) -> Settings {
-    settings_path(&app).map(|p| Settings::load(&p)).unwrap_or_default()
+    settings_path(&app)
+        .map(|p| Settings::load(&p))
+        .unwrap_or_default()
 }
 
 #[tauri::command]
@@ -182,7 +205,9 @@ fn set_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
 fn open_url(url: String) -> Result<(), String> {
     // Only allow web/mail schemes so a hostile sequence can't launch arbitrary
     // programs.
-    let ok = ["http://", "https://", "mailto:"].iter().any(|p| url.starts_with(p));
+    let ok = ["http://", "https://", "mailto:"]
+        .iter()
+        .any(|p| url.starts_with(p));
     if !ok {
         return Err("unsupported URL scheme".into());
     }
@@ -195,14 +220,21 @@ fn main() {
             warp: AsyncMutex::new(None),
             sessions: Mutex::new(HashMap::new()),
             next_id: AtomicU32::new(1),
+            warp_disabled: warp_disabled(),
         })
         .setup(|app| {
+            if warp_disabled() {
+                eprintln!("[warpterm] WARPTERM_NO_WARP set — running without a proxy");
+                return Ok(());
+            }
             // Register (or load persisted) accounts + start the WARP pool in the
             // background; commands report `ready:false` until it comes up.
             let handle = app.handle().clone();
             // Persist accounts under the app data dir so relaunches reuse them.
             let state_dir = handle.path().app_data_dir().ok().map(|d| d.join("warp"));
-            let n_accounts = settings_path(&handle).map(|p| Settings::load(&p).accounts).unwrap_or(2);
+            let n_accounts = settings_path(&handle)
+                .map(|p| Settings::load(&p).accounts)
+                .unwrap_or(2);
             tauri::async_runtime::spawn(async move {
                 let dir = state_dir.as_deref();
                 match load_or_register(dir, n_accounts).await {
