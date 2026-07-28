@@ -18,6 +18,8 @@ pub struct Settings {
     pub transparent_default: bool,
     /// How many WARP accounts to pool (applied on next launch).
     pub accounts: usize,
+    /// Auto-copy the selection to the clipboard when the mouse is released.
+    pub copy_on_select: bool,
 }
 
 impl Default for Settings {
@@ -27,6 +29,7 @@ impl Default for Settings {
             theme: "dark".to_string(),
             transparent_default: false,
             accounts: 2,
+            copy_on_select: false,
         }
     }
 }
@@ -75,6 +78,7 @@ mod tests {
         let d = Settings::load(&path);
         assert_eq!(d.font_size, 13);
         assert_eq!(d.accounts, 2);
+        assert!(!d.copy_on_select);
 
         // Save + reload, with clamping applied.
         let s = Settings {

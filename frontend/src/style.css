@@ -10,6 +10,11 @@
   box-sizing: border-box;
 }
 
+/* `display: flex` on .panel/#search would otherwise beat the UA [hidden] rule. */
+[hidden] {
+  display: none !important;
+}
+
 html,
 body,
 #app {
@@ -168,4 +173,33 @@ select {
   position: absolute;
   inset: 0;
   padding: 6px;
+}
+
+#search {
+  position: absolute;
+  top: 8px;
+  right: 16px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 6px;
+  background: var(--bar);
+  border: 1px solid #000;
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+}
+
+#search input {
+  width: 180px;
+  padding: 3px 8px;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid #333;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+#search button {
+  padding: 3px 7px;
 }

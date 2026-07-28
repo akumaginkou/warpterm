@@ -37,10 +37,22 @@ pin, and rotate are applied live through the in-process pool, so a running shell
 picks up changes without restarting.
 
 **Tabs.** Multiple shells in tabs — `+` (or `Ctrl+Shift+T`) opens one, `×` (or
-`Ctrl+Shift+W`) closes it; every tab shares the same WARP pool.
+`Ctrl+Shift+W`) closes it; every tab shares the same WARP pool. Tabs relabel
+themselves from the shell's title (OSC 0/2).
 
-**Settings (⚙).** Font size, theme (dark/light), default-transparent, and the
-pooled account count — persisted under the app data dir (`settings.json`).
+**Terminal ergonomics.**
+
+| Shortcut | Action |
+|---|---|
+| `Ctrl+Shift+C` / `Ctrl+Shift+V` | copy selection / paste (right-click also pastes) |
+| `Ctrl+Shift+F` | search the scrollback (`Enter`/`Shift+Enter` next/prev, `Esc` close) |
+| `Ctrl` `+` / `-` / `0` | font zoom in / out / reset |
+
+`Ctrl`/`Cmd`-click a URL to open it in your browser (only `http(s)`/`mailto` are
+launched). Enable **copy on select** in settings to auto-copy on mouse-up.
+
+**Settings (⚙).** Font size, theme (dark/light), default-transparent, copy-on-select,
+and the pooled account count — persisted under the app data dir (`settings.json`).
 
 **Transparent mode (Linux).** By default only proxy-aware tools (git, curl, npm…)
 honour the env. Tick **transparent** in the toolbar and new shells preload

@@ -177,6 +177,18 @@ fn set_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
     settings.save(&path).map_err(|e| e.to_string())
 }
 
+/// Open a URL (a clicked terminal link) in the system's default browser.
+#[tauri::command]
+fn open_url(url: String) -> Result<(), String> {
+    // Only allow web/mail schemes so a hostile sequence can't launch arbitrary
+    // programs.
+    let ok = ["http://", "https://", "mailto:"].iter().any(|p| url.starts_with(p));
+    if !ok {
+        return Err("unsupported URL scheme".into());
+    }
+    open::that(&url).map_err(|e| e.to_string())
+}
+
 fn main() {
     tauri::Builder::default()
         .manage(AppState {
@@ -219,6 +231,7 @@ fn main() {
             close_pty,
             get_settings,
             set_settings,
+            open_url,
         ])
         .run(tauri::generate_context!())
         .expect("error while running warpterm");

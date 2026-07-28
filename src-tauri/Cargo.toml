@@ -19,6 +19,7 @@ warpterm-core = { path = "../crates/warpterm-core" }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+open = "5"
 
 # warp-masque (a transitive dep via warpterm-core) needs the cf-connect-ip h3
 # patch; Cargo patches only apply from the building workspace root, so replicate

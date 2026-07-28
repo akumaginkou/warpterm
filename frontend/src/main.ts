@@ -1,6 +1,8 @@
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebglAddon } from "@xterm/addon-webgl";
+import { SearchAddon } from "@xterm/addon-search";
+import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
 import "./style.css";
 import { invoke } from "@tauri-apps/api/core";
@@ -12,6 +14,8 @@ interface Tab {
   n: number; // display number
   term: Terminal;
   fit: FitAddon;
+  search: SearchAddon;
+  title: string; // shell-reported title (OSC 0/2), if any
   ptyId: number | null;
   pane: HTMLDivElement;
   unlisten: UnlistenFn[];
@@ -35,8 +39,15 @@ interface AppSettings {
   theme: string;
   transparent_default: boolean;
   accounts: number;
+  copy_on_select: boolean;
 }
-let settings: AppSettings = { font_size: 13, theme: "dark", transparent_default: false, accounts: 2 };
+let settings: AppSettings = {
+  font_size: 13,
+  theme: "dark",
+  transparent_default: false,
+  accounts: 2,
+  copy_on_select: false,
+};
 
 function themeFor(name: string) {
   return name === "light"
@@ -55,7 +66,7 @@ function applySettings() {
   }
 }
 
-function newTerminal(pane: HTMLDivElement): { term: Terminal; fit: FitAddon } {
+function newTerminal(pane: HTMLDivElement): { term: Terminal; fit: FitAddon; search: SearchAddon } {
   const term = new Terminal({
     fontFamily: "ui-monospace, Menlo, Consolas, monospace",
     fontSize: settings.font_size,
@@ -63,15 +74,29 @@ function newTerminal(pane: HTMLDivElement): { term: Terminal; fit: FitAddon } {
     theme: themeFor(settings.theme),
   });
   const fit = new FitAddon();
+  const search = new SearchAddon();
   term.loadAddon(fit);
+  term.loadAddon(search);
+  // Ctrl/Cmd+click a URL -> open it in the system browser (vetted backend side).
+  term.loadAddon(
+    new WebLinksAddon((_e, uri) => {
+      invoke("open_url", { url: uri }).catch(() => {});
+    }),
+  );
   term.open(pane);
   try {
     term.loadAddon(new WebglAddon());
   } catch {
     /* fall back to the DOM/canvas renderer */
   }
+  // Auto-copy on select, when enabled.
+  term.onSelectionChange(() => {
+    if (!settings.copy_on_select) return;
+    const sel = term.getSelection();
+    if (sel) navigator.clipboard.writeText(sel).catch(() => {});
+  });
   fit.fit();
-  return { term, fit };
+  return { term, fit, search };
 }
 
 /** Spawn a shell for a tab and wire the PTY <-> terminal streams. */
@@ -102,11 +127,21 @@ async function newTab(openNow = true): Promise<Tab> {
   const pane = document.createElement("div");
   pane.className = "pane";
   panes.appendChild(pane);
-  const { term, fit } = newTerminal(pane);
+  const { term, fit, search } = newTerminal(pane);
   pane.addEventListener("mousedown", () => term.focus());
+  // Right-click pastes (a common terminal convention).
+  pane.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    pasteClipboard();
+  });
   term.attachCustomKeyEventHandler(handleChords);
 
-  const tab: Tab = { n: ++counter, term, fit, ptyId: null, pane, unlisten: [] };
+  const tab: Tab = { n: ++counter, term, fit, search, title: "", ptyId: null, pane, unlisten: [] };
+  // Reflect the shell-set window title (OSC 0/2) on the tab.
+  term.onTitleChange((title) => {
+    tab.title = title;
+    renderTabs();
+  });
   tabs.push(tab);
   setActive(tabs.length - 1);
   if (openNow) await openShell(tab);
@@ -145,7 +180,9 @@ function renderTabs() {
   tabs.forEach((t, idx) => {
     const el = document.createElement("div");
     el.className = "tab" + (idx === active ? " active" : "");
-    el.textContent = String(t.n);
+    const label = t.title ? (t.title.length > 20 ? t.title.slice(0, 19) + "…" : t.title) : String(t.n);
+    el.textContent = label;
+    el.title = t.title || `tab ${t.n}`;
     el.onclick = () => setActive(idx);
     const x = document.createElement("span");
     x.className = "x";
@@ -166,20 +203,74 @@ function renderTabs() {
   tabbar.appendChild(add);
 }
 
-// Ctrl+Shift+T new tab · Ctrl+Shift+W close tab (kept out of the shell).
+// App-level keyboard shortcuts, kept out of the shell (return false = swallow).
+//   Ctrl+Shift+T/W  new/close tab
+//   Ctrl+Shift+C/V  copy selection / paste
+//   Ctrl+Shift+F    scrollback search
+//   Ctrl +/-/0      font zoom in / out / reset
 function handleChords(e: KeyboardEvent): boolean {
-  if (e.type === "keydown" && e.ctrlKey && e.shiftKey) {
-    const k = e.key.toLowerCase();
-    if (k === "t") {
-      newTab();
+  if (e.type !== "keydown") return true;
+
+  if (e.ctrlKey && e.shiftKey) {
+    switch (e.key.toLowerCase()) {
+      case "t":
+        newTab();
+        return false;
+      case "w":
+        closeTab(active);
+        return false;
+      case "c": {
+        // Only intercept when there's a selection; otherwise let the shell see it.
+        const sel = tabs[active]?.term.getSelection();
+        if (sel) {
+          navigator.clipboard.writeText(sel).catch(() => {});
+          return false;
+        }
+        return true;
+      }
+      case "v":
+        pasteClipboard();
+        return false;
+      case "f":
+        openSearch();
+        return false;
+    }
+  }
+
+  if (e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey) {
+    if (e.key === "+" || e.key === "=") {
+      zoomFont(1);
       return false;
     }
-    if (k === "w") {
-      closeTab(active);
+    if (e.key === "-" || e.key === "_") {
+      zoomFont(-1);
+      return false;
+    }
+    if (e.key === "0") {
+      zoomFont(0);
       return false;
     }
   }
   return true;
+}
+
+async function pasteClipboard() {
+  const t = tabs[active];
+  if (!t) return;
+  try {
+    const text = await navigator.clipboard.readText();
+    if (text) t.term.paste(text);
+  } catch {
+    /* clipboard unavailable */
+  }
+}
+
+// dir > 0 zoom in, < 0 out, 0 reset to default. Persists like the settings panel.
+function zoomFont(dir: number) {
+  settings.font_size = dir === 0 ? 13 : clamp(settings.font_size + dir, 6, 48);
+  populatePanel();
+  applySettings();
+  saveSettings();
 }
 
 window.addEventListener("resize", () => {
@@ -189,6 +280,52 @@ window.addEventListener("resize", () => {
     if (t.ptyId !== null) invoke("resize_pty", { id: t.ptyId, rows: t.term.rows, cols: t.term.cols });
   }
 });
+
+// ---- scrollback search -----------------------------------------------------
+
+const $search = document.getElementById("search") as HTMLDivElement;
+const $searchInput = document.getElementById("search-input") as HTMLInputElement;
+const searchOpts = {
+  decorations: {
+    matchBackground: "#5c3a00",
+    activeMatchBackground: "#f6821f",
+    matchOverviewRuler: "#f6821f",
+    activeMatchColorOverviewRuler: "#ffffff",
+  },
+};
+
+function openSearch() {
+  $search.hidden = false;
+  $searchInput.focus();
+  $searchInput.select();
+  if ($searchInput.value) tabs[active]?.search.findNext($searchInput.value, searchOpts);
+}
+
+function closeSearch() {
+  $search.hidden = true;
+  tabs[active]?.search.clearDecorations();
+  tabs[active]?.term.focus();
+}
+
+$searchInput.addEventListener("keydown", (e) => {
+  const s = tabs[active]?.search;
+  if (e.key === "Enter") {
+    e.preventDefault();
+    if (e.shiftKey) s?.findPrevious($searchInput.value, searchOpts);
+    else s?.findNext($searchInput.value, searchOpts);
+  } else if (e.key === "Escape") {
+    e.preventDefault();
+    closeSearch();
+  }
+});
+$searchInput.addEventListener("input", () => {
+  tabs[active]?.search.findNext($searchInput.value, searchOpts);
+});
+(document.getElementById("search-next") as HTMLButtonElement).onclick = () =>
+  tabs[active]?.search.findNext($searchInput.value, searchOpts);
+(document.getElementById("search-prev") as HTMLButtonElement).onclick = () =>
+  tabs[active]?.search.findPrevious($searchInput.value, searchOpts);
+(document.getElementById("search-close") as HTMLButtonElement).onclick = closeSearch;
 
 // ---- WARP control bar ------------------------------------------------------
 
@@ -267,6 +404,7 @@ const $panel = document.getElementById("settings") as HTMLDivElement;
 const $font = document.getElementById("set-font") as HTMLInputElement;
 const $theme = document.getElementById("set-theme") as HTMLSelectElement;
 const $defTransparent = document.getElementById("set-transparent") as HTMLInputElement;
+const $copyOnSelect = document.getElementById("set-copy-on-select") as HTMLInputElement;
 const $accounts = document.getElementById("set-accounts") as HTMLInputElement;
 
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n || lo));
@@ -275,6 +413,7 @@ function populatePanel() {
   $font.value = String(settings.font_size);
   $theme.value = settings.theme;
   $defTransparent.checked = settings.transparent_default;
+  $copyOnSelect.checked = settings.copy_on_select;
   $accounts.value = String(settings.accounts);
 }
 
@@ -297,6 +436,10 @@ $theme.onchange = () => {
 $defTransparent.onchange = () => {
   settings.transparent_default = $defTransparent.checked;
   (document.getElementById("transparent") as HTMLInputElement).checked = settings.transparent_default;
+  saveSettings();
+};
+$copyOnSelect.onchange = () => {
+  settings.copy_on_select = $copyOnSelect.checked;
   saveSettings();
 };
 $accounts.onchange = () => {

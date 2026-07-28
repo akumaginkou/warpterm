@@ -28,13 +28,21 @@
           </select></label
         >
         <label><input type="checkbox" id="set-transparent" /> transparent by default</label>
+        <label><input type="checkbox" id="set-copy-on-select" /> copy on select</label>
         <label
           >Accounts <input type="number" id="set-accounts" min="1" max="8" />
           <span class="hint">(next launch)</span></label
         >
       </div>
       <nav id="tabs"></nav>
-      <div id="panes"></div>
+      <div id="panes">
+        <div id="search" hidden>
+          <input id="search-input" type="text" placeholder="Find…" spellcheck="false" />
+          <button id="search-prev" title="previous (Shift+Enter)">↑</button>
+          <button id="search-next" title="next (Enter)">↓</button>
+          <button id="search-close" title="close (Esc)">×</button>
+        </div>
+      </div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
