@@ -158,6 +158,37 @@ describe("warpterm GUI (tauri-driver)", function () {
     await driver.wait(async () => (await search.getAttribute("hidden")) !== null, 5000, "search should hide");
   });
 
+  it("opens a new tab from a launch profile", async () => {
+    // Configure a profile via the settings editor.
+    await driver.findElement(By.css("#gear")).click();
+    await driver.findElement(By.css("#add-profile")).click();
+    const row = await driver.wait(until.elementLocated(By.css("#profiles-list .profile-row")), 5000);
+    const inputs = await row.findElements(By.css("input"));
+    await inputs[0].sendKeys("sh-tmp"); // name
+    await inputs[1].sendKeys("/bin/sh"); // command (program)
+    await inputs[2].sendKeys("/tmp"); // cwd
+    await sleep(300);
+    await driver.findElement(By.css("#gear")).click(); // close the panel
+
+    const before = await tabsCount();
+    // Pick the profile from the tab-bar dropdown (reliable via the DOM).
+    await driver.executeScript(
+      "const s=document.querySelector('#tabs .profile-pick'); s.value='0'; s.dispatchEvent(new Event('change'));",
+    );
+    await driver.wait(async () => (await tabsCount()) === before + 1, 8000, "profile should open a tab");
+    await sleep(700);
+    // The profile's cwd (/tmp) should have taken effect.
+    await typeLine(String.raw`printf '\033]0;CWD:%s\a' "$PWD"`);
+    await driver.wait(
+      async () => {
+        const el = await driver.findElement(By.css("#tabs .tab.active .tab-label"));
+        return (await el.getText()).includes("/tmp");
+      },
+      10000,
+      "profile tab should start in /tmp",
+    );
+  });
+
   it("inherits the cwd into a split pane", async () => {
     // Fresh tab (no manual title) so the shell title drives the label.
     await focusFirstPane();

@@ -111,6 +111,50 @@ body.light {
   font-size: 11px;
 }
 
+.profiles {
+  border-top: 1px solid #000;
+  padding-top: 8px;
+}
+
+.profiles .phead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  color: var(--muted);
+}
+
+.profile-row {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.profile-row input {
+  min-width: 0;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid #333;
+  border-radius: 4px;
+  padding: 2px 4px;
+  font-size: 12px;
+}
+
+.profile-row input:nth-child(1) {
+  flex: 0 0 70px;
+}
+.profile-row input:nth-child(2) {
+  flex: 1 1 auto;
+}
+.profile-row input:nth-child(3) {
+  flex: 0 0 80px;
+}
+
+.profile-pick {
+  font-size: 12px;
+  padding: 2px 4px;
+}
+
 button,
 select {
   background: #262a33;

@@ -84,20 +84,39 @@ function removeLeaf(node: Node, target: Pane): Node | null {
 
 // ---- settings --------------------------------------------------------------
 
+interface Profile {
+  name: string;
+  program: string;
+  args: string[];
+  cwd?: string | null;
+}
 interface AppSettings {
   font_size: number;
+  font_family: string;
+  cursor_style: string;
+  scrollback: number;
   theme: string;
   transparent_default: boolean;
   accounts: number;
   copy_on_select: boolean;
+  profiles: Profile[];
 }
+const DEFAULT_FONT = "ui-monospace, Menlo, Consolas, monospace";
 let settings: AppSettings = {
   font_size: 13,
+  font_family: DEFAULT_FONT,
+  cursor_style: "bar",
+  scrollback: 1000,
   theme: "dark",
   transparent_default: false,
   accounts: 2,
   copy_on_select: false,
+  profiles: [],
 };
+
+type CursorStyle = "block" | "underline" | "bar";
+const cursorStyle = (): CursorStyle =>
+  (["block", "underline", "bar"].includes(settings.cursor_style) ? settings.cursor_style : "bar") as CursorStyle;
 
 function themeFor(name: string) {
   return name === "light"
@@ -111,6 +130,9 @@ function applySettings() {
   for (const t of tabs) {
     for (const p of leaves(t.root)) {
       p.term.options.fontSize = settings.font_size;
+      p.term.options.fontFamily = settings.font_family || DEFAULT_FONT;
+      p.term.options.cursorStyle = cursorStyle();
+      p.term.options.scrollback = settings.scrollback;
       p.term.options.theme = themeFor(settings.theme);
     }
   }
@@ -123,9 +145,11 @@ function newPane(): Pane {
   const host = document.createElement("div");
   host.className = "pane";
   const term = new Terminal({
-    fontFamily: "ui-monospace, Menlo, Consolas, monospace",
+    fontFamily: settings.font_family || DEFAULT_FONT,
     fontSize: settings.font_size,
     cursorBlink: true,
+    cursorStyle: cursorStyle(),
+    scrollback: settings.scrollback,
     theme: themeFor(settings.theme),
   });
   const fit = new FitAddon();
@@ -438,6 +462,29 @@ function renderTabs() {
   add.title = "new tab (Ctrl+Shift+T)";
   add.onclick = () => newTabInherit();
   tabbar.appendChild(add);
+
+  // Profile picker (only when profiles are configured): opens a new tab.
+  if (settings.profiles.length) {
+    const pick = document.createElement("select");
+    pick.className = "tab profile-pick";
+    pick.title = "new tab with a profile";
+    const ph = document.createElement("option");
+    ph.value = "";
+    ph.textContent = "profile ▾";
+    pick.appendChild(ph);
+    settings.profiles.forEach((p, i) => {
+      const o = document.createElement("option");
+      o.value = String(i);
+      o.textContent = p.name || `profile ${i + 1}`;
+      pick.appendChild(o);
+    });
+    pick.onchange = () => {
+      const p = settings.profiles[Number(pick.value)];
+      if (pick.value !== "" && p) openProfile(p);
+      pick.value = "";
+    };
+    tabbar.appendChild(pick);
+  }
 }
 
 /** Inline-edit a tab's label; Enter/blur commits, Escape cancels. */
@@ -707,19 +754,27 @@ $rotate.onclick = async () => {
 const $gear = document.getElementById("gear") as HTMLButtonElement;
 const $panel = document.getElementById("settings") as HTMLDivElement;
 const $font = document.getElementById("set-font") as HTMLInputElement;
+const $fontFamily = document.getElementById("set-font-family") as HTMLSelectElement;
+const $cursor = document.getElementById("set-cursor") as HTMLSelectElement;
+const $scrollback = document.getElementById("set-scrollback") as HTMLInputElement;
 const $theme = document.getElementById("set-theme") as HTMLSelectElement;
 const $defTransparent = document.getElementById("set-transparent") as HTMLInputElement;
 const $copyOnSelect = document.getElementById("set-copy-on-select") as HTMLInputElement;
 const $accounts = document.getElementById("set-accounts") as HTMLInputElement;
+const $profilesList = document.getElementById("profiles-list") as HTMLDivElement;
 
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n || lo));
 
 function populatePanel() {
   $font.value = String(settings.font_size);
+  $fontFamily.value = settings.font_family;
+  $cursor.value = cursorStyle();
+  $scrollback.value = String(settings.scrollback);
   $theme.value = settings.theme;
   $defTransparent.checked = settings.transparent_default;
   $copyOnSelect.checked = settings.copy_on_select;
   $accounts.value = String(settings.accounts);
+  renderProfilesEditor();
 }
 
 async function saveSettings() {
@@ -730,6 +785,22 @@ $gear.onclick = () => ($panel.hidden = !$panel.hidden);
 $font.onchange = () => {
   settings.font_size = clamp(+$font.value, 6, 48);
   $font.value = String(settings.font_size);
+  applySettings();
+  saveSettings();
+};
+$fontFamily.onchange = () => {
+  settings.font_family = $fontFamily.value;
+  applySettings();
+  saveSettings();
+};
+$cursor.onchange = () => {
+  settings.cursor_style = $cursor.value;
+  applySettings();
+  saveSettings();
+};
+$scrollback.onchange = () => {
+  settings.scrollback = clamp(+$scrollback.value, 100, 100000);
+  $scrollback.value = String(settings.scrollback);
   applySettings();
   saveSettings();
 };
@@ -752,6 +823,77 @@ $accounts.onchange = () => {
   $accounts.value = String(settings.accounts);
   saveSettings();
 };
+
+// ---- launch profiles -------------------------------------------------------
+
+const $addProfile = document.getElementById("add-profile") as HTMLButtonElement;
+
+const commandString = (p: Profile) => [p.program, ...p.args].filter(Boolean).join(" ");
+function parseCommand(s: string): { program: string; args: string[] } {
+  const parts = s.trim().split(/\s+/).filter(Boolean);
+  return { program: parts[0] ?? "", args: parts.slice(1) };
+}
+
+/** Open a new tab from a profile (its own cwd wins over inheritance). */
+function openProfile(p: Profile) {
+  newTabInherit({ program: p.program || undefined, args: p.args, cwd: p.cwd || undefined });
+}
+
+$addProfile.onclick = () => {
+  settings.profiles.push({ name: "", program: "", args: [] });
+  renderProfilesEditor();
+  renderTabs();
+  saveSettings();
+};
+
+/** Editable rows for the launch profiles (name · command · cwd · remove). */
+function renderProfilesEditor() {
+  $profilesList.textContent = "";
+  settings.profiles.forEach((p, i) => {
+    const row = document.createElement("div");
+    row.className = "profile-row";
+
+    const name = document.createElement("input");
+    name.placeholder = "name";
+    name.value = p.name;
+    name.oninput = () => {
+      p.name = name.value;
+      saveSettings();
+      renderTabs();
+    };
+
+    const cmd = document.createElement("input");
+    cmd.placeholder = "command (e.g. /bin/zsh -l)";
+    cmd.value = commandString(p);
+    cmd.oninput = () => {
+      const c = parseCommand(cmd.value);
+      p.program = c.program;
+      p.args = c.args;
+      saveSettings();
+    };
+
+    const cwd = document.createElement("input");
+    cwd.placeholder = "cwd (optional)";
+    cwd.value = p.cwd ?? "";
+    cwd.oninput = () => {
+      p.cwd = cwd.value.trim() || null;
+      saveSettings();
+    };
+
+    const del = document.createElement("button");
+    del.textContent = "×";
+    del.title = "remove profile";
+    del.onclick = () => {
+      settings.profiles.splice(i, 1);
+      renderProfilesEditor();
+      renderTabs();
+      saveSettings();
+    };
+
+    row.append(name, cmd, cwd, del);
+    $profilesList.appendChild(row);
+  });
+}
 
 // ---- WARP readiness --------------------------------------------------------
 

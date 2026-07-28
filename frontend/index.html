@@ -23,6 +23,25 @@
       <div id="settings" class="panel" hidden>
         <label>Font size <input type="number" id="set-font" min="6" max="48" /></label>
         <label
+          >Font
+          <select id="set-font-family">
+            <option value="ui-monospace, Menlo, Consolas, monospace">System mono</option>
+            <option value="'DejaVu Sans Mono', monospace">DejaVu Sans Mono</option>
+            <option value="'Liberation Mono', monospace">Liberation Mono</option>
+            <option value="'Noto Sans Mono', monospace">Noto Sans Mono</option>
+            <option value="'Courier New', monospace">Courier</option>
+          </select></label
+        >
+        <label
+          >Cursor
+          <select id="set-cursor">
+            <option value="bar">bar</option>
+            <option value="block">block</option>
+            <option value="underline">underline</option>
+          </select></label
+        >
+        <label>Scrollback <input type="number" id="set-scrollback" min="100" max="100000" step="100" /></label>
+        <label
           >Theme
           <select id="set-theme">
             <option value="dark">dark</option>
@@ -35,6 +54,13 @@
           >Accounts <input type="number" id="set-accounts" min="1" max="8" />
           <span class="hint">(next launch)</span></label
         >
+        <div class="profiles">
+          <div class="phead">
+            <span>Launch profiles</span>
+            <button id="add-profile" title="add a profile">+</button>
+          </div>
+          <div id="profiles-list"></div>
+        </div>
       </div>
       <nav id="tabs"></nav>
       <div id="panes">

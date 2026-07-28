@@ -36,7 +36,14 @@ pin, and rotate are applied live through the in-process pool, so a running shell
 picks up changes without restarting.
 
 **Tabs.** Multiple shells in tabs — `+` (or `Ctrl+Shift+T`) opens one; every tab
-shares the same WARP pool. Tabs relabel themselves from the shell's title (OSC 0/2).
+shares the same WARP pool. `Ctrl+1..9` jumps to a tab (9 = last), `Ctrl+Tab` /
+`Ctrl+Shift+Tab` cycle, and double-clicking a tab renames it. Tabs otherwise
+relabel themselves from the shell's title (OSC 0/2). A new tab or split opens in
+the **focused pane's current directory** (Linux).
+
+**Launch profiles.** Define shell/command presets (name · command · optional cwd)
+in settings; a `profile ▾` picker then appears next to `+` to open a tab with that
+profile.
 
 **Split panes.** Split a tab into multiple shells — `◫`/`⊟` in the toolbar (or
 `Ctrl+Shift+D`/`Ctrl+Shift+E`) split the focused pane right/down; drag the divider
@@ -54,8 +61,9 @@ to resize, `Ctrl+Shift+←/→/↑/↓` moves focus, `Ctrl+Shift+W` closes the f
 `Ctrl`/`Cmd`-click a URL to open it in your browser (only `http(s)`/`mailto` are
 launched). Enable **copy on select** in settings to auto-copy on mouse-up.
 
-**Settings (⚙).** Font size, theme (dark/light), default-transparent, copy-on-select,
-and the pooled account count — persisted under the app data dir (`settings.json`).
+**Settings (⚙).** Font size + family, cursor style, scrollback, theme (dark/light),
+default-transparent, copy-on-select, launch profiles, and the pooled account count —
+persisted under the app data dir (`settings.json`).
 
 **Transparent mode (Linux).** By default only proxy-aware tools (git, curl, npm…)
 honour the env. Tick **transparent** in the toolbar and new shells preload
