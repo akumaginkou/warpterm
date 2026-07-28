@@ -26,8 +26,16 @@ fit.fit();
 
 let ptyId: number | null = null;
 
+function transparentEnabled(): boolean {
+  return (document.getElementById("transparent") as HTMLInputElement)?.checked ?? false;
+}
+
 async function startPty() {
-  ptyId = await invoke<number>("open_pty", { rows: term.rows, cols: term.cols });
+  ptyId = await invoke<number>("open_pty", {
+    rows: term.rows,
+    cols: term.cols,
+    transparent: transparentEnabled(),
+  });
 
   // PTY output -> terminal.
   await listen<number[]>(`pty://${ptyId}`, (e) => {
@@ -123,6 +131,8 @@ $rotate.onclick = async () => {
     refresh();
   }
 };
+// Transparent mode changes the shell's env, so reload to apply it to a fresh shell.
+(document.getElementById("transparent") as HTMLInputElement).onchange = () => location.reload();
 
 // ---- boot ------------------------------------------------------------------
 

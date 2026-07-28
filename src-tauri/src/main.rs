@@ -85,11 +85,27 @@ async fn open_pty(
     state: State<'_, AppState>,
     rows: u16,
     cols: u16,
+    transparent: bool,
 ) -> Result<u32, String> {
-    // Point the shell at the WARP front SOCKS port (env is fixed; WARP on/off is
-    // toggled live via the pool).
+    // Point the shell at the WARP front SOCKS port. In transparent mode (Linux),
+    // preload proxychains so *all* TCP is forced through WARP, not just
+    // proxy-aware tools; otherwise inject the proxy env. WARP on/off stays live
+    // via the pool.
     let env = match &*state.warp.lock().await {
-        Some(w) => w.proxy_env(),
+        Some(w) => {
+            if transparent {
+                match app.path().app_data_dir() {
+                    Ok(dir) => {
+                        std::fs::create_dir_all(&dir).ok();
+                        w.transparent_env(&dir.join("proxychains.conf"))
+                            .unwrap_or_else(|_| w.proxy_env())
+                    }
+                    Err(_) => w.proxy_env(),
+                }
+            } else {
+                w.proxy_env()
+            }
+        }
         None => Vec::new(),
     };
 

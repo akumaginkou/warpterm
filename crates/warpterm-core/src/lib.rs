@@ -11,7 +11,9 @@
 
 pub mod env;
 pub mod pty;
+pub mod transparent;
 pub mod warp;
 
 pub use pty::{PtyConfig, PtySession};
+pub use transparent::transparent_env;
 pub use warp::{load_or_register, register_accounts, WarpController};

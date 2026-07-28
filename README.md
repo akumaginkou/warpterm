@@ -36,6 +36,18 @@ The shell's proxy env is pinned to the front SOCKS port once; WARP on/off, egres
 pin, and rotate are applied live through the in-process pool, so a running shell
 picks up changes without restarting.
 
+**Transparent mode (Linux).** By default only proxy-aware tools (git, curl, npm…)
+honour the env. Tick **transparent** in the toolbar and new shells preload
+`proxychains`, forcing *every* program's TCP through WARP — even proxy-unaware
+ones. Verify the mechanism headlessly:
+
+```sh
+cargo run -p warpterm-core --example transparent_demo   # a curl with NO proxy env -> warp=on
+```
+
+(Transparent mode is Linux-only for now — it uses `LD_PRELOAD`; macOS/Windows use
+the env path.)
+
 ## Layout
 
 ```

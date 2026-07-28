@@ -59,6 +59,14 @@ body,
   font-variant-numeric: tabular-nums;
 }
 
+.chk {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
 button,
 select {
   background: #262a33;

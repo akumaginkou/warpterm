@@ -38,6 +38,12 @@ impl WarpController {
         crate::env::proxy_env(self.socks_port)
     }
 
+    /// Env vars for a shell that routes **all** TCP through WARP (Linux only),
+    /// by writing a proxychains config to `config_path` and preloading it.
+    pub fn transparent_env(&self, config_path: &Path) -> Result<Vec<(String, String)>> {
+        crate::transparent::transparent_env(self.socks_port, config_path)
+    }
+
     /// Whether traffic is tunnelled (vs direct).
     pub fn enabled(&self) -> bool {
         self.pool.enabled()
