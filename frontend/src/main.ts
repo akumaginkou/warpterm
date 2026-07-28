@@ -127,25 +127,36 @@ $rotate.onclick = async () => {
 // ---- boot ------------------------------------------------------------------
 
 // Open the shell only once WARP is up, so it inherits the proxy env. (WARP
-// on/off is still live thereafter via the pool.)
-async function waitForWarp(timeoutMs = 30000): Promise<void> {
+// on/off is still live thereafter via the pool.) Returns whether it came up.
+async function waitForWarp(timeoutMs = 40000): Promise<boolean> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     try {
       const s = JSON.parse(await invoke<string>("warp_status"));
-      if (s.ready !== false) return; // controller up => SOCKS port available
+      if (s.ready !== false) return true; // controller up => SOCKS port available
     } catch {
       /* retry */
     }
     await new Promise((r) => setTimeout(r, 400));
   }
+  return false;
 }
+
+// Focus the terminal when the pane is clicked (so keystrokes land in the shell).
+document.getElementById("terminal")!.addEventListener("mousedown", () => term.focus());
 
 (async () => {
   term.writeln("\x1b[90mStarting WARP…\x1b[0m");
-  await waitForWarp();
-  await invoke("warp_trace", { id: 0 }).catch(() => {});
+  const up = await waitForWarp();
+  if (up) {
+    await invoke("warp_trace", { id: 0 }).catch(() => {});
+  } else {
+    term.writeln(
+      "\x1b[33mWARP didn't come up in time — starting the shell without a proxy. Toggle WARP from the bar once it's ready.\x1b[0m",
+    );
+  }
   await startPty();
+  term.focus();
   refresh();
 })();
 

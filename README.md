@@ -62,12 +62,20 @@ icons (`cargo tauri icon path/to/icon.png`).
 
 ```sh
 cd frontend && npm install && cd ..
-cd src-tauri && cargo tauri dev
+cargo tauri dev                       # dev: live-reloads the frontend from Vite
+
+# self-contained production build (embeds the frontend; no dev server needed):
+cargo tauri build --no-bundle         # -> src-tauri/target/release/warpterm
+# or, without a global CLI: npx @tauri-apps/cli@^2 build --no-bundle
 ```
 
 Running it registers WARP accounts on first launch (persisted under the app data
 dir, so relaunches reuse them); open a shell and
 `curl https://www.cloudflare.com/cdn-cgi/trace` should report `warp=on`.
+
+> Note: a plain `cargo build` produces a *dev* binary that loads the frontend
+> from the Vite dev server (`devUrl`). Use `cargo tauri build` for a standalone
+> app that serves its embedded assets.
 
 ## Note on embedding warp-masque
 
