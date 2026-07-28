@@ -63,6 +63,22 @@ frontend/              # Vite + xterm.js UI (terminal + WARP control bar)
 vendor/h3/             # replicated cf-connect-ip h3 patch required by warp-masque (see PATCH.md)
 ```
 
+## Install (Linux)
+
+Grab a `.deb` or `.AppImage` from [Releases](https://github.com/akumaginkou/warpterm/releases)
+(built by the release workflow on a `v*` tag), or build them yourself:
+
+```sh
+cd frontend && npm install && cd ..
+cargo tauri build        # -> src-tauri/target/release/bundle/{deb,appimage}/
+
+sudo dpkg -i src-tauri/target/release/bundle/deb/warpterm_*_amd64.deb   # then run: warpterm
+# or just run the portable AppImage:
+./src-tauri/target/release/bundle/appimage/warpterm_*_amd64.AppImage
+```
+
+The `.deb` declares `proxychains4` as a dependency (for transparent mode).
+
 ## Build & run
 
 ### Core (headless — CI-friendly)

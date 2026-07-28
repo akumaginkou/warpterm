@@ -23,7 +23,15 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
-    "icon": ["icons/icon.png"]
+    "targets": ["deb", "appimage"],
+    "category": "Utility",
+    "shortDescription": "Terminal with Cloudflare WARP built in",
+    "longDescription": "A terminal emulator whose shells egress through an embedded Cloudflare WARP (MASQUE) proxy, with live egress control.",
+    "icon": ["icons/icon.png"],
+    "linux": {
+      "deb": {
+        "depends": ["proxychains4"]
+      }
+    }
   }
 }

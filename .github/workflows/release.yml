@@ -1,0 +1,41 @@
+name: Release
+
+# Push a tag like `v0.1.0` to build installers and attach them to a (draft)
+# GitHub Release.
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Tauri system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev \
+            libjavascriptcoregtk-4.1-dev librsvg2-dev libxdo-dev \
+            libssl-dev libayatana-appindicator3-dev
+      - name: Install frontend deps
+        run: npm install
+        working-directory: frontend
+      - name: Build + release (deb · AppImage)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: src-tauri
+          tagName: ${{ github.ref_name }}
+          releaseName: "warpterm ${{ github.ref_name }}"
+          releaseBody: "Linux installers (.deb, .AppImage). Transparent mode needs `proxychains4`."
+          releaseDraft: true
