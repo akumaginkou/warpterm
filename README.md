@@ -123,8 +123,8 @@ The app is launched with `WARPTERM_NO_WARP=1`, so the suite needs no network.
 
 Prerequisites: Rust, Node, the [Tauri v2 system deps](https://tauri.app/start/prerequisites/)
 (Linux: `webkit2gtk-4.1`, `gtk3`, `libsoup-3.0`; macOS: Xcode CLT; Windows:
-WebView2 + MSVC), the Tauri CLI (`cargo install tauri-cli --version '^2'`), and app
-icons (`cargo tauri icon path/to/icon.png`).
+WebView2 + MSVC) and the Tauri CLI (`cargo install tauri-cli --version '^2'`). The
+app icons are committed; regenerate them from the source with `./app-icon.sh`.
 
 ```sh
 cd frontend && npm install && cd ..
