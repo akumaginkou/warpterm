@@ -5,10 +5,14 @@ it opens egresses through an embedded [warp-proxy](https://github.com/akumaginko
 (`warp-masque`) pool, and you switch/rotate the egress IP or toggle WARP live from
 the toolbar — no external proxy, no system VPN, no admin rights.
 
-> Status: **M0 (scaffold + headless core).** The terminal core (PTY + embedded
-> WARP + proxy-env injection) is implemented and tested headlessly; the Tauri GUI
-> and xterm.js frontend are scaffolded and build on a desktop with the Tauri
-> prerequisites.
+> Status: **M1 (runs).** The GUI builds and runs: it renders the terminal with a
+> live shell and a WARP control bar that shows the current egress IP/colo, with
+> the `warp-masque` pool embedded in-process. Verified headlessly under Xvfb —
+> shell prompt + live egress (`104.28.x.x · NRT`, WARP on). The terminal core
+> (PTY + embedded WARP + proxy-env injection) is unit-tested headlessly.
+>
+> Known gap: automated keystroke injection into the WebKitGTK terminal (for
+> headless E2E tests) needs a WebDriver (`tauri-driver`), not `xdotool`.
 
 ## How it works
 

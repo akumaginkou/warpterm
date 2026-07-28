@@ -126,9 +126,28 @@ $rotate.onclick = async () => {
 
 // ---- boot ------------------------------------------------------------------
 
-startPty();
+// Open the shell only once WARP is up, so it inherits the proxy env. (WARP
+// on/off is still live thereafter via the pool.)
+async function waitForWarp(timeoutMs = 30000): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const s = JSON.parse(await invoke<string>("warp_status"));
+      if (s.ready !== false) return; // controller up => SOCKS port available
+    } catch {
+      /* retry */
+    }
+    await new Promise((r) => setTimeout(r, 400));
+  }
+}
+
+(async () => {
+  term.writeln("\x1b[90mStarting WARP…\x1b[0m");
+  await waitForWarp();
+  await invoke("warp_trace", { id: 0 }).catch(() => {});
+  await startPty();
+  refresh();
+})();
+
 refresh();
 setInterval(refresh, 4000);
-listen("warp://ready", () => {
-  invoke("warp_trace", { id: 0 }).then(refresh);
-});

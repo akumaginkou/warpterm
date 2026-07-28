@@ -16,6 +16,5 @@ warp-state/
 *.warp-config.json
 account-*.json
 
-# generated icons (run `cargo tauri icon <png>`)
-src-tauri/icons/*
-!src-tauri/icons/.gitkeep
+# app icons are committed so the app builds out of the box
+# (regenerate with `cargo tauri icon path/to/icon.png`)
