@@ -36,9 +36,13 @@ The shell's proxy env is pinned to the front SOCKS port once; WARP on/off, egres
 pin, and rotate are applied live through the in-process pool, so a running shell
 picks up changes without restarting.
 
-**Tabs.** Multiple shells in tabs — `+` (or `Ctrl+Shift+T`) opens one, `×` (or
-`Ctrl+Shift+W`) closes it; every tab shares the same WARP pool. Tabs relabel
-themselves from the shell's title (OSC 0/2).
+**Tabs.** Multiple shells in tabs — `+` (or `Ctrl+Shift+T`) opens one; every tab
+shares the same WARP pool. Tabs relabel themselves from the shell's title (OSC 0/2).
+
+**Split panes.** Split a tab into multiple shells — `◫`/`⊟` in the toolbar (or
+`Ctrl+Shift+D`/`Ctrl+Shift+E`) split the focused pane right/down; drag the divider
+to resize, `Ctrl+Shift+←/→/↑/↓` moves focus, `Ctrl+Shift+W` closes the focused pane
+(and the tab once its last pane is gone). Every pane egresses through the same pool.
 
 **Terminal ergonomics.**
 
