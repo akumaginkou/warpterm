@@ -24,9 +24,21 @@ pub struct PtyConfig {
 
 impl Default for PtyConfig {
     fn default() -> Self {
-        Self { shell: None, args: Vec::new(), cwd: None, env: Vec::new(), rows: 24, cols: 80 }
+        Self {
+            shell: None,
+            args: Vec::new(),
+            cwd: None,
+            env: Vec::new(),
+            rows: 24,
+            cols: 80,
+        }
     }
 }
+
+/// PTY output stream (read the shell's bytes).
+pub type PtyReader = Box<dyn Read + Send>;
+/// PTY input stream (write keystrokes to the shell).
+pub type PtyWriter = Box<dyn Write + Send>;
 
 /// A live PTY + its child process. Keep it alive for the session; drop to close.
 pub struct PtySession {
@@ -37,9 +49,7 @@ pub struct PtySession {
 impl PtySession {
     /// Spawn a shell in a new PTY. Returns the session plus the master reader
     /// (PTY output) and writer (keystrokes to the shell).
-    pub fn spawn(
-        cfg: &PtyConfig,
-    ) -> Result<(PtySession, Box<dyn Read + Send>, Box<dyn Write + Send>)> {
+    pub fn spawn(cfg: &PtyConfig) -> Result<(PtySession, PtyReader, PtyWriter)> {
         let pty = native_pty_system();
         let pair = pty.openpty(PtySize {
             rows: cfg.rows.max(1),
@@ -66,7 +76,14 @@ impl PtySession {
 
         let reader = pair.master.try_clone_reader()?;
         let writer = pair.master.take_writer()?;
-        Ok((PtySession { master: pair.master, child }, reader, writer))
+        Ok((
+            PtySession {
+                master: pair.master,
+                child,
+            },
+            reader,
+            writer,
+        ))
     }
 
     /// Resize the PTY (rows × cols); the shell receives SIGWINCH.

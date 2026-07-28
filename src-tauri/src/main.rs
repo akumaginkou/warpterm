@@ -18,7 +18,7 @@ use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::Mutex as AsyncMutex;
 use warpterm_core::pty::{PtyConfig, PtySession};
-use warpterm_core::{register_accounts, WarpController};
+use warpterm_core::{load_or_register, WarpController};
 
 /// How many pooled WARP accounts to start with.
 const DEFAULT_ACCOUNTS: usize = 2;
@@ -155,11 +155,14 @@ fn main() {
             next_id: AtomicU32::new(1),
         })
         .setup(|app| {
-            // Register accounts + start the WARP pool in the background; commands
-            // report `ready:false` until it comes up.
+            // Register (or load persisted) accounts + start the WARP pool in the
+            // background; commands report `ready:false` until it comes up.
             let handle = app.handle().clone();
+            // Persist accounts under the app data dir so relaunches reuse them.
+            let state_dir = handle.path().app_data_dir().ok().map(|d| d.join("warp"));
             tauri::async_runtime::spawn(async move {
-                match register_accounts(DEFAULT_ACCOUNTS).await {
+                let dir = state_dir.as_deref();
+                match load_or_register(dir, DEFAULT_ACCOUNTS).await {
                     Ok(configs) => match WarpController::start(configs, false).await {
                         Ok(w) => {
                             let state = handle.state::<AppState>();

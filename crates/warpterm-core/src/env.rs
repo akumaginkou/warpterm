@@ -35,6 +35,8 @@ mod tests {
         let all = env.iter().find(|(k, _)| k == "ALL_PROXY").unwrap();
         assert_eq!(all.1, "socks5h://127.0.0.1:1080");
         assert!(env.iter().any(|(k, _)| k == "https_proxy"));
-        assert!(env.iter().any(|(k, v)| k == "NO_PROXY" && v.contains("127.0.0.1")));
+        assert!(env
+            .iter()
+            .any(|(k, v)| k == "NO_PROXY" && v.contains("127.0.0.1")));
     }
 }

@@ -14,4 +14,4 @@ pub mod pty;
 pub mod warp;
 
 pub use pty::{PtyConfig, PtySession};
-pub use warp::{register_accounts, WarpController};
+pub use warp::{load_or_register, register_accounts, WarpController};

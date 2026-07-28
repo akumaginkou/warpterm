@@ -1,5 +1,7 @@
 # warpterm
 
+[![CI](https://github.com/akumaginkou/warpterm/actions/workflows/ci.yml/badge.svg)](https://github.com/akumaginkou/warpterm/actions/workflows/ci.yml)
+
 A cross-platform terminal emulator with **Cloudflare WARP built in**. Every shell
 it opens egresses through an embedded [warp-proxy](https://github.com/akumaginkou/warp-proxy)
 (`warp-masque`) pool, and you switch/rotate the egress IP or toggle WARP live from
@@ -63,7 +65,8 @@ cd frontend && npm install && cd ..
 cd src-tauri && cargo tauri dev
 ```
 
-Running it registers WARP accounts on first launch; open a shell and
+Running it registers WARP accounts on first launch (persisted under the app data
+dir, so relaunches reuse them); open a shell and
 `curl https://www.cloudflare.com/cdn-cgi/trace` should report `warp=on`.
 
 ## Note on embedding warp-masque

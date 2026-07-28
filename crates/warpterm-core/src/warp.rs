@@ -5,6 +5,7 @@
 //! subsequent WARP changes go through the pool, so a running shell picks them up
 //! without re-spawning.
 
+use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -83,15 +84,59 @@ impl WarpController {
     }
 }
 
-/// Register `n` fresh throwaway WARP accounts (direct, with DoH-bypass fallback).
-pub async fn register_accounts(n: usize) -> Result<Vec<WarpConfig>> {
+/// Provision `n` WARP accounts: load `account-<i>.json` from `state_dir` when
+/// present (registering + saving any that are missing), or register `n` fresh
+/// ephemeral accounts when `state_dir` is `None`. Persisting means relaunches
+/// reuse accounts instead of re-registering.
+pub async fn load_or_register(state_dir: Option<&Path>, n: usize) -> Result<Vec<WarpConfig>> {
     let mut out = Vec::with_capacity(n);
     for i in 1..=n {
         let opts = RegisterOptions {
             device_name: Some(format!("warpterm-{i}")),
             ..Default::default()
         };
-        out.push(RegistrationClient::register_auto(&opts).await?);
+        match state_dir {
+            Some(dir) => {
+                let path = dir.join(format!("account-{i}.json"));
+                if path.exists() {
+                    out.push(WarpConfig::load(&path).map_err(anyhow::Error::from)?);
+                } else {
+                    let cfg = RegistrationClient::register_auto(&opts).await?;
+                    std::fs::create_dir_all(dir).ok();
+                    cfg.save(&path).map_err(anyhow::Error::from)?;
+                    out.push(cfg);
+                }
+            }
+            None => out.push(RegistrationClient::register_auto(&opts).await?),
+        }
     }
     Ok(out)
+}
+
+/// Register `n` fresh throwaway WARP accounts (no persistence).
+pub async fn register_accounts(n: usize) -> Result<Vec<WarpConfig>> {
+    load_or_register(None, n).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn loads_persisted_configs_without_network() {
+        let dir = std::env::temp_dir().join(format!("warpterm-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let cfg = WarpConfig {
+            private_key: "persisted".into(),
+            ..Default::default()
+        };
+        cfg.save(dir.join("account-1.json")).unwrap();
+
+        // With the file present, no registration (network) happens.
+        let loaded = load_or_register(Some(&dir), 1).await.unwrap();
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].private_key, "persisted");
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
 }

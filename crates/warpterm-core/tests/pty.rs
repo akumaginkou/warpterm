@@ -8,7 +8,11 @@ use warpterm_core::pty::{PtyConfig, PtySession};
 
 #[test]
 fn shell_echo_roundtrip() {
-    let cfg = PtyConfig { rows: 24, cols: 80, ..Default::default() };
+    let cfg = PtyConfig {
+        rows: 24,
+        cols: 80,
+        ..Default::default()
+    };
     let (mut session, mut reader, mut writer) = PtySession::spawn(&cfg).expect("spawn pty");
 
     // Pump PTY output off the blocking reader onto a channel.
@@ -22,7 +26,9 @@ fn shell_echo_roundtrip() {
         }
     });
 
-    writer.write_all(b"echo wt_marker_42\n").expect("write to pty");
+    writer
+        .write_all(b"echo wt_marker_42\n")
+        .expect("write to pty");
     writer.flush().ok();
 
     // The marker should appear at least twice: the tty echo of the typed line
